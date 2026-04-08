@@ -15,7 +15,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from devinterp.optim import SGLD
+from devinterp.optim.sgld import SGLD
 from devinterp.slt.llc import LLCEstimator
 from devinterp.slt.sampler import estimate_learning_coeff_with_summary
 
