@@ -123,7 +123,7 @@ def estimate_llc(
         loader=dataloader,
         evaluate=cross_entropy_evaluate,
         sampling_method=SGLD,
-        sampling_method_kwargs=dict(
+        optimizer_kwargs=dict(
             lr=learning_rate,
             nbeta=nbeta,
             localization=localization,
