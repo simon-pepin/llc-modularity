@@ -1,0 +1,35 @@
+# Experiment A: Independent atomic subtasks (calibration)
+# Train on {0} ∪ {1} only — no composite tasks.
+# Prediction: delta ≈ 0 (additivity holds for truly independent subtasks).
+
+m: 4
+k: 4
+n: 16
+
+width: 128
+depth: 3
+activation: relu
+use_layernorm: false
+
+# Only atomic subtasks, no composite
+task_codes: [[0], [1]]
+samples_per_task: 2000
+steps: 100000
+lr: 0.001
+eval_every: 100
+
+seeds: [0, 1, 2, 3, 4]
+
+# LLC: measure on {0}, {1}, and their data union {0}∪{1}
+llc:
+  num_chains: 10
+  num_draws: 500
+  num_burnin_steps: 100
+  learning_rate: 0.0001
+  samples_per_code: 2000
+  batch_size: 256
+
+# Additivity triples to measure
+additivity:
+  triples:
+    - ["{0}", "{1}", "{0}∪{1}"]

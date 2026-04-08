@@ -1,0 +1,33 @@
+# Experiment C: Width sweep
+# Repeat composite curriculum experiment across widths.
+# Prediction: at small widths (forced sharing), delta should be larger.
+
+m: 4
+k: 4
+n: 16
+
+widths: [64, 128, 256, 512]
+depth: 3
+activation: relu
+use_layernorm: false
+
+task_codes: [[0], [1], [2], [3], [0, 1, 2, 3]]
+samples_per_task: 2000
+steps: 200000
+lr: 0.001
+eval_every: 500
+
+seeds: [0, 1, 2, 3, 4]
+
+llc:
+  num_chains: 10
+  num_draws: 500
+  num_burnin_steps: 100
+  learning_rate: 0.0001
+  samples_per_code: 2000
+  batch_size: 256
+
+additivity:
+  full:
+    atomics: ["{0}", "{1}", "{2}", "{3}"]
+    composite: "{0}∪{1}∪{2}∪{3}"

@@ -1,0 +1,48 @@
+# Experiment B: Composite with curriculum
+# Train on {0} ∪ {1} ∪ {2} ∪ {3} ∪ {0,1,2,3} (standard CMSP setup).
+# Key: measure LLC additivity across atomic and composite subtasks.
+
+m: 4
+k: 4
+n: 16
+
+width: 128
+depth: 3
+activation: relu
+use_layernorm: false
+
+task_codes: [[0], [1], [2], [3], [0, 1, 2, 3]]
+samples_per_task: 2000
+steps: 200000
+lr: 0.001
+eval_every: 100
+
+seeds: [0, 1, 2, 3, 4]
+
+llc:
+  num_chains: 10
+  num_draws: 500
+  num_burnin_steps: 100
+  learning_rate: 0.0001
+  samples_per_code: 2000
+  batch_size: 256
+
+# LLC measurements needed:
+# Per-code: {0}, {1}, {2}, {3}, {0,1,2,3}
+# Unions: {0}∪{1}, {0}∪{1}∪{2}∪{3} (data from all atomics combined)
+llc_measurements:
+  per_code: [[0], [1], [2], [3], [0, 1, 2, 3]]
+  unions:
+    "{0}∪{1}": [[0], [1]]
+    "{2}∪{3}": [[2], [3]]
+    "{0}∪{1}∪{2}∪{3}": [[0], [1], [2], [3]]
+
+additivity:
+  # Pairwise atomic defects
+  triples:
+    - ["{0}", "{1}", "{0}∪{1}"]
+    - ["{2}", "{3}", "{2}∪{3}"]
+  # Full composite defect
+  full:
+    atomics: ["{0}", "{1}", "{2}", "{3}"]
+    composite: "{0}∪{1}∪{2}∪{3}"
