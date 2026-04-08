@@ -14,9 +14,9 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from .data import code_to_str, generate_cmsp_batch, make_subtask_indices
+from .data import CMSPDataset, code_to_str, generate_cmsp_batch, make_subtask_indices
 from .model import count_parameters, make_mlp
-from .utils import ensure_dir, save_config, set_seed
+from .utils import ensure_dir, plot_training_curves, save_config, set_seed
 
 
 def compute_per_subtask_loss(
@@ -30,7 +30,7 @@ def compute_per_subtask_loss(
     device: str,
     dtype: torch.dtype,
 ) -> Dict[str, float]:
-    """Evaluate the model's loss on each subtask separately."""
+    """Evaluate the model's loss on each subtask separately (fresh random data)."""
     model.eval()
     losses = {}
     with torch.no_grad():
@@ -43,6 +43,23 @@ def compute_per_subtask_loss(
             logits = model(x)
             loss = loss_fn(logits, y).item()
             losses[code_to_str(code)] = loss
+    model.train()
+    return losses
+
+
+def compute_loss_on_fixed_data(
+    model: nn.Module,
+    datasets: Dict[str, CMSPDataset],
+    loss_fn: nn.Module,
+) -> Dict[str, float]:
+    """Evaluate the model's loss on fixed (pre-generated) datasets per subtask."""
+    model.eval()
+    losses = {}
+    with torch.no_grad():
+        for name, ds in datasets.items():
+            logits = model(ds.x)
+            loss = loss_fn(logits, ds.y).item()
+            losses[name] = loss
     model.train()
     return losses
 
@@ -73,12 +90,13 @@ def train_cmsp(
             - eval_every: evaluate per-subtask loss every N steps (default: 100)
             - checkpoint_every: save checkpoint every N steps (default: 0, disabled)
             - checkpoint_steps: specific steps to save checkpoints (default: [])
+            - test_samples_per_task: samples per code in fixed test set (default: 2000)
         save_dir: Directory to save results and checkpoints. None = don't save.
         verbose: Whether to show progress bar.
 
     Returns:
         Dict with keys: model, config, steps, losses, subtask_losses,
-        subtask_indices, n_parameters.
+        test_subtask_losses, subtask_indices, n_parameters.
     """
     # Parse config with defaults
     m = config.get("m", 4)
@@ -97,6 +115,7 @@ def train_cmsp(
     eval_every = config.get("eval_every", 100)
     checkpoint_every = config.get("checkpoint_every", 0)
     checkpoint_steps = set(config.get("checkpoint_steps", []))
+    test_samples_per_task = config.get("test_samples_per_task", 2000)
 
     dtype = torch.float32 if dtype_str == "float32" else torch.float64
 
@@ -120,10 +139,21 @@ def train_cmsp(
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, eps=1e-5)
     loss_fn = nn.CrossEntropyLoss()
 
+    # Create fixed test datasets (one per subtask code, with a separate seed)
+    test_datasets = {}
+    for i, code in enumerate(task_codes):
+        test_datasets[code_to_str(code)] = CMSPDataset(
+            n=n, m=m, subtask_indices=subtask_indices,
+            task_codes=[code], samples_per_code=test_samples_per_task,
+            device=device, dtype=dtype,
+            seed=seed + 10000 + i,  # offset seed so test data != train data
+        )
+
     # Tracking
     step_list = []
     loss_list = []
     subtask_losses = {code_to_str(c): [] for c in task_codes}
+    test_subtask_losses = {code_to_str(c): [] for c in task_codes}
     eval_steps = []
 
     if save_dir is not None:
@@ -136,6 +166,7 @@ def train_cmsp(
     for step in iterator:
         # Evaluation
         if step % eval_every == 0:
+            # Train loss (fresh random samples)
             per_task = compute_per_subtask_loss(
                 model, n, m, subtask_indices, task_codes,
                 eval_samples=samples_per_task, loss_fn=loss_fn,
@@ -143,10 +174,18 @@ def train_cmsp(
             )
             for key, val in per_task.items():
                 subtask_losses[key].append(val)
+
+            # Test loss (fixed dataset)
+            per_task_test = compute_loss_on_fixed_data(
+                model, test_datasets, loss_fn,
+            )
+            for key, val in per_task_test.items():
+                test_subtask_losses[key].append(val)
+
             eval_steps.append(step)
 
             if verbose:
-                task_str = " | ".join(f"{k}:{v:.4f}" for k, v in per_task.items())
+                task_str = " | ".join(f"{k}:{v:.4f}" for k, v in per_task_test.items())
                 iterator.set_postfix_str(task_str[:80])
 
         # Training step
@@ -182,6 +221,11 @@ def train_cmsp(
     )
     for key, val in per_task.items():
         subtask_losses[key].append(val)
+
+    per_task_test = compute_loss_on_fixed_data(model, test_datasets, loss_fn)
+    for key, val in per_task_test.items():
+        test_subtask_losses[key].append(val)
+
     eval_steps.append(steps)
 
     # Save final model and results
@@ -191,16 +235,19 @@ def train_cmsp(
         "eval_steps": eval_steps,
         "losses": loss_list,
         "subtask_losses": subtask_losses,
+        "test_subtask_losses": test_subtask_losses,
         "subtask_indices": subtask_indices,
         "task_codes": task_codes,
         "n_parameters": n_params,
         "final_subtask_losses": per_task,
+        "final_test_subtask_losses": per_task_test,
     }
 
     if save_dir is not None:
         torch.save(model.state_dict(), save_dir / "model.pt")
         with open(save_dir / "results.pkl", "wb") as f:
             pickle.dump(results, f)
+        plot_training_curves(results, save_path=save_dir / "loss_curves.png", show=False)
 
     results["model"] = model
     return results

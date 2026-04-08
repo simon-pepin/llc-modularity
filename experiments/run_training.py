@@ -57,9 +57,12 @@ def main():
     results = train_cmsp(config, save_dir=save_dir, verbose=not args.quiet)
 
     print(f"\nTraining complete. Parameters: {results['n_parameters']}")
-    print("Final per-subtask losses:")
-    for name, loss in results["final_subtask_losses"].items():
-        print(f"  {name}: {loss:.6f}")
+    print("Final per-subtask losses (train / test):")
+    for name in results["final_subtask_losses"]:
+        train_loss = results["final_subtask_losses"][name]
+        test_loss = results["final_test_subtask_losses"][name]
+        print(f"  {name}: {train_loss:.6f} / {test_loss:.6f}")
+    print(f"Loss curves saved to {save_dir}/loss_curves.png")
 
 
 if __name__ == "__main__":
