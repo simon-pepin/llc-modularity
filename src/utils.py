@@ -87,6 +87,7 @@ def plot_training_curves(
     ax_train.set_xlabel("Step")
     ax_train.set_ylabel("Loss")
     ax_train.set_title("Train Loss (fresh samples)")
+    ax_train.set_xscale("log")
     ax_train.set_yscale("log")
     ax_train.legend(fontsize=8)
 
@@ -99,6 +100,7 @@ def plot_training_curves(
         ax_test.set_xlabel("Step")
         ax_test.set_ylabel("Loss")
         ax_test.set_title("Test Loss (fixed dataset)")
+        ax_test.set_xscale("log")
         ax_test.set_yscale("log")
         ax_test.legend(fontsize=8)
 
